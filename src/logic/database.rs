@@ -113,7 +113,7 @@ impl Database {
                 )
                 .expect("Failed to insert file into database");
             let new_file = self.get_file_by_server_id(file.server_id);
-            new_file.expect("Failed to retrieve newly inserted file").id
+            new_file.expect("Failed to retrieve newly inserted file").server_id
         } else {
             let finish_date = if existing_file.clone().unwrap().finish_date.is_some() {
                 existing_file.clone().unwrap().finish_date
