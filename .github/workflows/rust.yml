@@ -15,39 +15,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Build
         run: cargo build --verbose
       - name: Run tests
         run: cargo test --verbose
   
-#  deploy:
-#
-#    needs: [ build ]
-#    if: github.ref == 'refs/heads/master'
-#
-#    runs-on: ubuntu-latest
-#
-#    steps:
-#      - uses: actions/checkout@v3
-#
-#      - name: Create config file
-#        run: echo '${{ secrets.CONFIG_FILE }}' >> config.json
-#
-#      - name: Copy project to the hosting
-#        uses: easingthemes/ssh-deploy@v2.1.5
-#        env:
-#          SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
-#          ARGS: "-rltgoDzvO --delete"
-#          SOURCE: ""
-#          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
-#          REMOTE_USER: ${{ secrets.REMOTE_USER }}
-#          TARGET: ${{ secrets.REMOTE_TARGET }}
-#
-#      - name: Deploy project with docker in hosting
-#        uses: garygrossgarten/github-action-ssh@release
-#        with:
-#          command: cd ${{ secrets.REMOTE_TARGET }} && docker-compose up --build -d
-#          host: ${{ secrets.REMOTE_HOST }}
-#          username: ${{ secrets.REMOTE_USER }}
-#          privateKey: ${{ secrets.SERVER_SSH_KEY}}
+  deploy:
+
+    needs: [ build ]
+    if: github.ref == 'refs/heads/master'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: create environment file
+        run: |
+          echo "FP_MONITORING_URL=https://bt.guilledev.com" > .env
+          echo "FP_SCAN_INTERVAL=60" >> .env
+          echo "FP_FILE_LIFETIME=604800" >> .env
+          echo "FP_FILE_LIFETIME_AFTER_COPIED=18000" >> .env
+          echo "FP_USERNAME=${{ secrets.FILE_PURGE_USERNAME }}" >> .env
+          echo "FP_PASSWORD=${{ secrets.FILE_PURGE_PASSWORD }}" >> .env
+          echo "FILE_PURGE_DATA=${{ secrets.FILE_PURGE_DATA }}" >> .env
+
+      - name: Copy project to the hosting
+        uses: easingthemes/ssh-deploy@main
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          ARGS: "-rltgoDzvO --delete"
+          SOURCE: ""
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          TARGET: ${{ secrets.REMOTE_TARGET }}
+
+      - name: Deploy project with docker in hosting
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          script: cd ${{ secrets.REMOTE_TARGET }} && docker-compose up -d --build
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY}}
