@@ -1,0 +1,15 @@
+services:
+  deploy:
+    build:
+      context: .
+    restart: always
+    environment:
+      - FP_DATABASE_PATH=/data/file_purge.db
+      - FP_MONITORING_URL=${FP_MONITORING_URL}
+      - FP_SCAN_INTERVAL=${FP_SCAN_INTERVAL}
+      - FP_FILE_LIFETIME=${FP_FILE_LIFETIME}
+      - FP_FILE_LIFETIME_AFTER_COPIED=${FP_FILE_LIFETIME_AFTER_COPIED}
+      - FP_USERNAME=${FP_USERNAME}
+      - FP_PASSWORD=${FP_PASSWORD}
+    volumes:
+      - ${FILE_PURGE_DATA}:/data
