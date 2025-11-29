@@ -1,5 +1,6 @@
 services:
   deploy:
+    container_name: transmission-file-purge
     build:
       context: .
     restart: always
