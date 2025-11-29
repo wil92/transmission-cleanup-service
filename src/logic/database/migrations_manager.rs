@@ -15,7 +15,7 @@ impl Migration for InitialMigration {
         println!("Creating file table...");
         connection
             .execute(
-                "CREATE TABLE file ( id INTEGER PRIMARY KEY, serverId INTEGER UNIQUE NOT NULL, name TEXT, addedDate INTEGER NOT NULL, finishDate INTEGER );",
+                "CREATE TABLE file ( id INTEGER PRIMARY KEY, serverId INTEGER UNIQUE NOT NULL, addedDate INTEGER NOT NULL, finishDate INTEGER );",
                 [],
             )
             .expect("Error creating file table");

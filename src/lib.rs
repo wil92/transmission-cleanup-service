@@ -67,7 +67,7 @@ impl Monitor {
         }
     }
 
-    fn scan_files_and_cleanup(&self) {
+    fn scan_files_and_cleanup(&mut self) {
         // Fetch files from API and update database
         let files = self.api.fetch_files().expect("Failed to fetch files");
         let mut updated_files: Vec<i32> = vec![];

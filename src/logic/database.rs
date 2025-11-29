@@ -108,12 +108,12 @@ impl Database {
         if existing_file.is_none() {
             self.connection
                 .execute(
-                    "INSERT INTO file (serverId, name, addedDate, finishDate) VALUES (?1, ?2, ?3, ?4);",
-                    (file.server_id, file.name, file.added_date, file.finish_date),
+                    "INSERT INTO file (serverId, addedDate, finishDate) VALUES (?1, ?2, ?3);",
+                    (file.server_id, file.added_date, file.finish_date),
                 )
                 .expect("Failed to insert file into database");
-            let id = self.get_file_by_server_id(file.server_id);
-            id.expect("Failed to retrieve newly inserted file").id
+            let new_file = self.get_file_by_server_id(file.server_id);
+            new_file.expect("Failed to retrieve newly inserted file").id
         } else {
             let finish_date = if existing_file.clone().unwrap().finish_date.is_some() {
                 existing_file.clone().unwrap().finish_date
@@ -122,8 +122,8 @@ impl Database {
             };
             self.connection
                 .execute(
-                    "UPDATE file SET name = ?1, addedDate = ?2, finishDate = ?3 WHERE serverId = ?4;",
-                    (file.name, file.added_date, finish_date, file.server_id),
+                    "UPDATE file SET addedDate = ?1, finishDate = ?2 WHERE serverId = ?3;",
+                    (file.added_date, finish_date, file.server_id),
                 )
                 .expect("Failed to update file in database");
             existing_file.unwrap().id
@@ -133,16 +133,15 @@ impl Database {
     pub fn get_file_by_server_id(&self, server_id: i32) -> Option<File> {
         let mut stmt = self
             .connection
-            .prepare("SELECT * FROM file WHERE id = ?1;")
+            .prepare("SELECT * FROM file WHERE serverId = ?1;")
             .unwrap();
         let result = stmt
             .query_map([server_id], |row| {
                 Ok(File {
                     id: row.get(0)?,
                     server_id: row.get(1)?,
-                    name: row.get(2)?,
-                    added_date: row.get(3)?,
-                    finish_date: row.get(4)?,
+                    added_date: row.get(2)?,
+                    finish_date: row.get(3)?,
                 })
             })
             .expect("Failed to query file table")
@@ -176,9 +175,8 @@ impl Database {
             Ok(File {
                 id: row.get(0)?,
                 server_id: row.get(1)?,
-                name: row.get(2)?,
-                added_date: row.get(3)?,
-                finish_date: row.get(4)?,
+                added_date: row.get(2)?,
+                finish_date: row.get(3)?,
             })
         })
         .expect("Failed to query file table")

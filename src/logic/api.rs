@@ -1,5 +1,6 @@
 use crate::logic::database::models::File;
 use base64::prelude::*;
+use reqwest::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -17,6 +18,7 @@ pub struct ReqDeleteArgs {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(untagged)]
 pub enum ReqArgs {
     List(ReqListArgs),
     Delete(ReqDeleteArgs),
@@ -60,6 +62,7 @@ pub struct ResListBody {
 pub struct Api {
     auth_token: String,
     api_url: String,
+    session_id: Option<String>,
 }
 
 impl Api {
@@ -67,15 +70,15 @@ impl Api {
         Api {
             auth_token: BASE64_STANDARD.encode(&format!("{}:{}", username, password)),
             api_url,
+            session_id: None,
         }
     }
 
-    pub fn fetch_files(&self) -> Result<Vec<File>, String> {
+    pub fn fetch_files(&mut self) -> Result<Vec<File>, String> {
         let data = ReqListBody {
             arguments: ReqArgs::List(ReqListArgs {
                 fields: vec![
                     "id".to_string(),
-                    "name".to_string(),
                     "addedDate".to_string(),
                     "isFinished".to_string(),
                 ],
@@ -85,9 +88,7 @@ impl Api {
         };
         let res = self.post_to_api(&data).expect("Failed to send request");
         let body = res.text().expect("Failed to read response text");
-        println!("{:#?}", body);
 
-        // let res_body: ResListBody = res.json().expect("Failed to parse list of files to json");
         let res_body: ResListBody =
             serde_json::from_str(&body).expect("Failed to parse list of files to json");
         if res_body.result != "success" {
@@ -104,7 +105,6 @@ impl Api {
         };
         while i < args.torrents.len() {
             let mut id: Option<i32> = None;
-            let mut name: Option<String> = None;
             let mut added_date: Option<i64> = None;
             let mut is_finished: Option<bool> = None;
 
@@ -117,16 +117,6 @@ impl Api {
                                 id = Some(*id_v as i32);
                             } else {
                                 return Err(format!("Invalid id value {:?}", &args.torrents[i][j]));
-                            }
-                        }
-                        "name" => {
-                            if let Value::Text(name_v) = &args.torrents[i][j] {
-                                name = Some(name_v.to_string());
-                            } else {
-                                return Err(format!(
-                                    "Invalid name value {:?}",
-                                    &args.torrents[i][j]
-                                ));
                             }
                         }
                         "addedDate" => {
@@ -157,7 +147,7 @@ impl Api {
                 j += 1;
             }
 
-            if id.is_some() && name.is_some() && added_date.is_some() && is_finished.is_some() {
+            if id.is_some() && added_date.is_some() && is_finished.is_some() {
                 let millis = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
@@ -165,7 +155,6 @@ impl Api {
                 files.push(File {
                     id: 0,
                     server_id: id.expect("Missing torrent id") as i32,
-                    name: name.expect("Missing torrent name"),
                     added_date: added_date.expect("Missing torrent added date"),
                     finish_date: if is_finished.expect("Missing isFinished value") {
                         Some(millis)
@@ -175,8 +164,8 @@ impl Api {
                 })
             } else {
                 return Err(format!(
-                    "Missing torrent fields: id={:?}, name={:?}, added_date={:?}, is_finished={:?}",
-                    id, name, added_date, is_finished
+                    "Missing torrent fields: id={:?}, added_date={:?}, is_finished={:?}",
+                    id, added_date, is_finished
                 ));
             }
             i += 1;
@@ -185,7 +174,7 @@ impl Api {
         Ok(files)
     }
 
-    pub fn delete_file(&self, ids: &Vec<i32>) -> Result<(), String> {
+    pub fn delete_file(&mut self, ids: &Vec<i32>) -> Result<(), String> {
         let data = ReqListBody {
             arguments: ReqArgs::Delete(ReqDeleteArgs {
                 delete_local_data: true,
@@ -202,15 +191,49 @@ impl Api {
         Ok(())
     }
 
-    fn post_to_api(&self, data: &ReqListBody) -> Result<reqwest::blocking::Response, String> {
+    fn post_to_api(&mut self, data: &ReqListBody) -> Result<reqwest::blocking::Response, String> {
         let client = reqwest::blocking::Client::new();
 
-        let url = format!("{}/transmission/rpc", self.api_url);
-        Ok(client
-            .post(&url)
-            .header("authorization", format!("Basic {}", self.auth_token))
-            .json(data)
-            .send()
-            .map_err(|e| format!("Failed to send request to API: {}", e))?)
+        let mut session_exchange_flag = false;
+
+        loop {
+            let url = format!("{}/transmission/rpc", self.api_url);
+            let mut response = client
+                .post(&url)
+                .header("authorization", format!("Basic {}", self.auth_token))
+                .json(data);
+
+            if let Some(session_id) = &self.session_id {
+                response = response.header("x-transmission-session-id", session_id);
+            }
+
+            let response = response
+                .send()
+                .map_err(|e| format!("Failed to send request to API: {}", e))?;
+
+            if response.status() == StatusCode::CONFLICT {
+                if session_exchange_flag {
+                    return Err("Failed to exchange session ID with API".to_string());
+                }
+                session_exchange_flag = true;
+                self.session_id = Some(
+                    response
+                        .headers()
+                        .get("x-transmission-session-id")
+                        .expect("Missing session ID")
+                        .to_str()
+                        .expect("Invalid session ID")
+                        .to_string(),
+                );
+                continue;
+            } else if response.status() != StatusCode::OK {
+                return Err(format!(
+                    "API returned unexpected status code: {}",
+                    response.status()
+                ));
+            }
+
+            return Ok(response);
+        }
     }
 }

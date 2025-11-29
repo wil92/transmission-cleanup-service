@@ -82,9 +82,8 @@ fn get_file_by_id(db: &Database, file_id: i32) -> Option<File> {
             Ok(File {
                 id: row.get(0)?,
                 server_id: row.get(1)?,
-                name: row.get(2)?,
-                added_date: row.get(3)?,
-                finish_date: row.get(4)?,
+                added_date: row.get(2)?,
+                finish_date: row.get(3)?,
             })
         })
         .expect("Failed to query file table")
@@ -100,7 +99,6 @@ fn get_file_by_id(db: &Database, file_id: i32) -> Option<File> {
 
 fn assert_files_equal(file1: &File, file2: &File) {
     assert_eq!(file1.server_id, file2.server_id);
-    assert_eq!(file1.name, file2.name);
     assert_eq!(file1.added_date, file2.added_date);
     assert_eq!(file1.finish_date, file2.finish_date);
 }
@@ -113,7 +111,6 @@ fn test_create_file() {
     let file = File {
         id: 0,
         server_id: 1,
-        name: "Test File".to_string(),
         added_date: 1625079600,
         finish_date: None,
     };
@@ -127,7 +124,6 @@ fn test_create_file() {
     let updated_file = File {
         id: 0,
         server_id: 1,
-        name: "Updated Test File".to_string(),
         added_date: 1625079601,
         finish_date: Some(1625083200),
     };
@@ -140,7 +136,6 @@ fn test_create_file() {
     let finish_date_only_update = File {
         id: 0,
         server_id: 1,
-        name: "Updated Test File".to_string(),
         added_date: 1625079601,
         finish_date: Some(1625086800),
     };
@@ -158,21 +153,18 @@ fn test_remove_no_matching_files_ids() {
     let file1 = File {
         id: 0,
         server_id: 1,
-        name: "File 1".to_string(),
         added_date: 1625079600,
         finish_date: None,
     };
     let file2 = File {
         id: 0,
         server_id: 2,
-        name: "File 2".to_string(),
         added_date: 1625079601,
         finish_date: None,
     };
     let file3 = File {
         id: 0,
         server_id: 3,
-        name: "File 3".to_string(),
         added_date: 1625079602,
         finish_date: None,
     };
@@ -196,14 +188,12 @@ fn test_list_files() {
     let file1 = File {
         id: 0,
         server_id: 1,
-        name: "File 1".to_string(),
         added_date: 1625079600,
         finish_date: None,
     };
     let file2 = File {
         id: 0,
         server_id: 2,
-        name: "File 2".to_string(),
         added_date: 1625079601,
         finish_date: Some(1625083200),
     };
@@ -220,9 +210,8 @@ fn test_list_files() {
             Ok(File {
                 id: row.get(0)?,
                 server_id: row.get(1)?,
-                name: row.get(2)?,
-                added_date: row.get(3)?,
-                finish_date: row.get(4)?,
+                added_date: row.get(2)?,
+                finish_date: row.get(3)?,
             })
         })
         .expect("Failed to query file table")
@@ -232,4 +221,27 @@ fn test_list_files() {
     assert_eq!(files.len(), 2, "There should be 2 files in the database");
     assert_files_equal(&files[0], &file1);
     assert_files_equal(&files[1], &file2);
+}
+
+#[test]
+fn test_get_file_by_server_id() {
+    let mut db = Database::new(None);
+    db.connect().expect("Failed to connect to database");
+
+    let file = File {
+        id: 0,
+        server_id: 42,
+        added_date: 1625079600,
+        finish_date: None,
+    };
+
+    db.create_or_update_file(file.clone());
+
+    let fetched_file = db
+        .get_file_by_server_id(42)
+        .expect("File not found by server ID");
+    assert_files_equal(&fetched_file, &file);
+
+    let non_existent_file = db.get_file_by_server_id(999);
+    assert!(non_existent_file.is_none(), "Non-existent file should return None");
 }
