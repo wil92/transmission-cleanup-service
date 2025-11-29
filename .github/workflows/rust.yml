@@ -48,13 +48,18 @@ jobs:
           ARGS: "-rltgoDzvO --delete"
           SOURCE: ""
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          REMOTE_PORT: '20'
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           TARGET: ${{ secrets.REMOTE_TARGET }}
 
       - name: Deploy project with docker in hosting
-        uses: appleboy/ssh-action@v1.0.0
+        uses: appleboy/ssh-action@v1
         with:
-          script: cd ${{ secrets.REMOTE_TARGET }} && docker-compose up -d --build
+          script: |
+            cd ${{ secrets.REMOTE_TARGET }}
+            docker-compose down
+            docker-compose up -d --build
           host: ${{ secrets.REMOTE_HOST }}
+          port: '20'
           username: ${{ secrets.REMOTE_USER }}
           key: ${{ secrets.SERVER_SSH_KEY}}
