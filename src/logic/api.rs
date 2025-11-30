@@ -1,6 +1,7 @@
 use crate::logic::database::models::File;
 use base64::prelude::*;
 use reqwest::StatusCode;
+use reqwest::blocking::Response;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -88,7 +89,13 @@ impl Api {
             }),
             method: "torrent-get".to_string(),
         };
-        let res = self.post_to_api(&data).expect("Failed to send request");
+        let res: Response = match self.post_to_api(&data) {
+            Ok(res) => res,
+            Err(err) => {
+                eprintln!("Error fetching files: {}", err);
+                return Ok(vec![]);
+            }
+        };
         let body = res.text().expect("Failed to read response text");
 
         let res_body: ResListBody =
@@ -184,7 +191,13 @@ impl Api {
             }),
             method: "torrent-remove".to_string(),
         };
-        let res = self.post_to_api(&data).expect("Failed to send request");
+        let res = match self.post_to_api(&data) {
+            Ok(res) => res,
+            Err(err) => {
+                eprintln!("Failed to send delete request: {:?}", err);
+                return Ok(());
+            }
+        };
 
         let res_body: ResListBody = res.json().expect("Failed to parse list of files to json");
         if res_body.result != "success" {
