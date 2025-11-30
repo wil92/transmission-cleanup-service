@@ -4,6 +4,8 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 
+const REQUEST_RETRY_COUNT: u8 = 5;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ReqListArgs {
     fields: Vec<String>,
@@ -195,6 +197,7 @@ impl Api {
         let client = reqwest::blocking::Client::new();
 
         let mut session_exchange_flag = false;
+        let mut req_attempts = 0;
 
         loop {
             let url = format!("{}/transmission/rpc", self.api_url);
@@ -207,33 +210,43 @@ impl Api {
                 response = response.header("x-transmission-session-id", session_id);
             }
 
-            let response = response
-                .send()
-                .map_err(|e| format!("Failed to send request to API: {}", e))?;
+            match response.send() {
+                Ok(res) => {
+                    if res.status() == StatusCode::CONFLICT {
+                        if session_exchange_flag {
+                            return Err("Failed to exchange session ID with API".to_string());
+                        }
+                        session_exchange_flag = true;
+                        self.session_id = Some(
+                            res.headers()
+                                .get("x-transmission-session-id")
+                                .expect("Missing session ID")
+                                .to_str()
+                                .expect("Invalid session ID")
+                                .to_string(),
+                        );
+                        continue;
+                    } else if res.status() != StatusCode::OK {
+                        req_attempts += 1;
+                        if req_attempts < REQUEST_RETRY_COUNT {
+                            continue;
+                        }
+                        return Err(format!(
+                            "API returned unexpected status code: {}",
+                            res.status()
+                        ));
+                    }
 
-            if response.status() == StatusCode::CONFLICT {
-                if session_exchange_flag {
-                    return Err("Failed to exchange session ID with API".to_string());
+                    return Ok(res);
                 }
-                session_exchange_flag = true;
-                self.session_id = Some(
-                    response
-                        .headers()
-                        .get("x-transmission-session-id")
-                        .expect("Missing session ID")
-                        .to_str()
-                        .expect("Invalid session ID")
-                        .to_string(),
-                );
-                continue;
-            } else if response.status() != StatusCode::OK {
-                return Err(format!(
-                    "API returned unexpected status code: {}",
-                    response.status()
-                ));
+                Err(err) => {
+                    req_attempts += 1;
+                    if req_attempts < REQUEST_RETRY_COUNT {
+                        continue;
+                    }
+                    return Err(format!("Failed to send request to API: {}", err));
+                }
             }
-
-            return Ok(response);
         }
     }
 }
