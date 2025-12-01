@@ -2,23 +2,27 @@ use base64::prelude::*;
 use fp::logic::api::Api;
 use mockito::Matcher;
 
-#[test]
-fn test_api_list_files() {
-    let mut server = mockito::Server::new();
+#[tokio::test]
+async fn test_api_list_files() {
+    let mut server = mockito::Server::new_async().await;
     let username = "test_user";
     let password = "test_password";
-
-    let mut api = Api::new(username.to_string(), password.to_string(), server.url());
 
     server
         .mock("POST", "/transmission/rpc")
         .match_header("authorization", Matcher::Exact(format!("Basic {}", BASE64_STANDARD.encode(format!("{}:{}", username, password)))))
         .with_status(200)
         .with_header("content-type", "application/json; charset=UTF-8")
-        .with_body("{ \"arguments\": { \"torrents\": [ [\"id\",\"addedDate\",\"isFinished\"], [1, 1763580763, false] ] }, \"result\": \"success\" }")
+        .with_body("{ \"arguments\": { \"torrents\": [ {\"id\": 1, \"addedDate\": 1763580763, \"isFinished\": false} ] }, \"result\": \"success\" }")
         .create();
 
-    match api.fetch_files() {
+    let mut api = Api::new(
+        username.to_string(),
+        password.to_string(),
+        format!("{}/transmission/rpc", server.url()),
+    );
+
+    match api.fetch_files().await {
         Ok(files) => {
             assert_eq!(files[0].id, 0);
             assert_eq!(files[0].server_id, 1);
@@ -29,23 +33,27 @@ fn test_api_list_files() {
     }
 }
 
-#[test]
-fn test_api_list_files_with_finish() {
-    let mut server = mockito::Server::new();
+#[tokio::test]
+async fn test_api_list_files_with_finish() {
+    let mut server = mockito::Server::new_async().await;
     let username = "test_user";
     let password = "test_password";
-
-    let mut api = Api::new(username.to_string(), password.to_string(), server.url());
 
     server
         .mock("POST", "/transmission/rpc")
         .with_status(200)
         .match_header("authorization", Matcher::Exact(format!("Basic {}", BASE64_STANDARD.encode(format!("{}:{}", username, password)))))
         .with_header("content-type", "application/json; charset=UTF-8")
-        .with_body("{ \"arguments\": { \"torrents\": [ [\"id\",\"addedDate\",\"isFinished\"], [1, 1763580763, true] ] }, \"result\": \"success\" }")
+        .with_body("{ \"arguments\": { \"torrents\": [ {\"id\": 1, \"addedDate\": 1763580763, \"isFinished\": true} ] }, \"result\": \"success\" }")
         .create();
 
-    match api.fetch_files() {
+    let mut api = Api::new(
+        username.to_string(),
+        password.to_string(),
+        format!("{}/transmission/rpc", server.url()),
+    );
+
+    match api.fetch_files().await {
         Ok(files) => {
             assert_eq!(files[0].id, 0);
             assert_eq!(files[0].server_id, 1);
@@ -56,13 +64,11 @@ fn test_api_list_files_with_finish() {
     }
 }
 
-#[test]
-fn test_api_delete_file() {
-    let mut server = mockito::Server::new();
+#[tokio::test]
+async fn test_api_delete_file() {
+    let mut server = mockito::Server::new_async().await;
     let username = "test_user";
     let password = "test_password";
-
-    let mut api = Api::new(username.to_string(), password.to_string(), server.url());
 
     server
         .mock("POST", "/transmission/rpc")
@@ -78,7 +84,13 @@ fn test_api_delete_file() {
         .with_body("{ \"arguments\": { }, \"result\": \"success\" }")
         .create();
 
-    match api.delete_file(&vec![1, 2, 3]) {
+    let mut api = Api::new(
+        username.to_string(),
+        password.to_string(),
+        format!("{}/transmission/rpc", server.url()),
+    );
+
+    match api.delete_file(&vec![1, 2, 3]).await {
         Ok(_) => {}
         Err(e) => panic!("API delete_file failed: {}", e),
     }

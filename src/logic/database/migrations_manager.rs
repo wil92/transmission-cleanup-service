@@ -1,19 +1,24 @@
-use std::rc::Rc;
-
 use rusqlite::Connection;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
-pub trait Migration {
-    fn apply(&self, connection: Rc<Connection>);
+#[async_trait::async_trait]
+pub trait Migration: Send + Sync {
+    async fn apply(&self, connection: Arc<Mutex<Connection>>);
     fn version(&self) -> u16;
     fn description(&self) -> String;
 }
 
 // MIGRATIONS BEGIN
 pub struct InitialMigration {}
+
+#[async_trait::async_trait]
 impl Migration for InitialMigration {
-    fn apply(&self, connection: Rc<Connection>) {
+    async fn apply(&self, connection: Arc<Mutex<Connection>>) {
         println!("Creating file table...");
         connection
+            .lock()
+            .await
             .execute(
                 "CREATE TABLE file ( id INTEGER PRIMARY KEY, serverId INTEGER UNIQUE NOT NULL, addedDate INTEGER NOT NULL, finishDate INTEGER );",
                 [],

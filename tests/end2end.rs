@@ -1,16 +1,71 @@
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::thread;
 
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
-use fp::Monitor;
-use fp::logic::api::ResArgs::List;
-use fp::logic::api::Value;
-use fp::logic::api::{ReqArgs, ReqListBody, ResListBody};
 use mockito::{Matcher, Mock, ServerGuard};
+use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
+
+use fp::Monitor;
 
 const TEST_TIMEOUT_SECS: i64 = 4;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ReqListArgs {
+    fields: Vec<String>,
+    format: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ReqDeleteArgs {
+    #[serde(rename = "delete-local-data")]
+    pub delete_local_data: bool,
+    pub ids: Vec<i64>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+enum ReqArgs {
+    List(ReqListArgs),
+    Delete(ReqDeleteArgs),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ReqListBody {
+    pub arguments: ReqArgs,
+    method: String,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct ResItem {
+    id: i64,
+    #[serde(rename = "addedDate")]
+    added_date: i64,
+    #[serde(rename = "isFinished")]
+    is_finished: bool,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct ResListArgs {
+    pub torrents: Vec<ResItem>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct ResDeleteArgs {}
+
+#[derive(Deserialize, Serialize, Debug)]
+#[serde(untagged)]
+enum ResArgs {
+    List(ResListArgs),
+    Delete(ResDeleteArgs),
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct ResListBody {
+    pub arguments: ResArgs,
+    pub result: String,
+}
 
 fn get_now_timestamp() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -44,41 +99,33 @@ fn setup_base_mock(
         .with_header("content-type", "text/html; charset=UTF-8")
 }
 
-#[test]
-fn test_end_to_end() {
+#[tokio::test]
+async fn test_end_to_end() {
     let test_start_time = get_now_timestamp();
 
-    let mut server = mockito::Server::new();
+    let mut server = mockito::Server::new_async().await;
     let username = "test_user";
     let password = "test_password";
     let session_id = "cVuDHwPg4GEXflXQ5TaUateyGUDdSYrD549gdtT750G9SwXr";
 
     let list_res = ResListBody {
-        arguments: fp::logic::api::ResArgs::List(fp::logic::api::ResListArgs {
+        arguments: ResArgs::List(ResListArgs {
             torrents: vec![
-                vec![
-                    Value::Text("id".to_string()),
-                    Value::Text("addedDate".to_string()),
-                    Value::Text("name".to_string()),
-                    Value::Text("isFinished".to_string()),
-                ],
-                vec![
-                    Value::Int(1),
-                    Value::Int(get_now_timestamp()),
-                    Value::Text("test_file.txt".to_string()),
-                    Value::Bool(false),
-                ],
-                vec![
-                    Value::Int(2),
-                    Value::Int(get_now_timestamp()),
-                    Value::Text("test_file2.txt".to_string()),
-                    Value::Bool(true),
-                ],
+                ResItem {
+                    id: 1,
+                    added_date: get_now_timestamp(),
+                    is_finished: false,
+                },
+                ResItem {
+                    id: 2,
+                    added_date: get_now_timestamp(),
+                    is_finished: true,
+                },
             ],
         }),
         result: "success".to_string(),
     };
-    let list_res = Arc::new(Mutex::new(list_res));
+    let list_res = Arc::new(std::sync::Mutex::new(list_res));
     let session_exchanged = Arc::new(AtomicBool::new(false));
 
     // handle fetch_files
@@ -92,6 +139,7 @@ fn test_end_to_end() {
         409,
     )
     .with_body_from_request(move |request| {
+        println!("Exchanging session id");
         assert!(!request.has_header("x-transmission-session-id"));
         session_exchanged_clone.store(true, Ordering::SeqCst);
         "start session id exchange".into()
@@ -127,16 +175,10 @@ fn test_end_to_end() {
 
         if let ReqArgs::Delete(args) = req_body.arguments {
             assert!(args.delete_local_data);
-            for server_id in args.ids {
+            for remove_id in args.ids {
                 let mut res = list_res_clone.lock().unwrap();
-                if let List(res_args) = &mut res.arguments {
-                    res_args.torrents.retain(|torrent| {
-                        if let Value::Int(id) = &torrent[0] {
-                            *id != server_id as i64
-                        } else {
-                            true
-                        }
-                    });
+                if let ResArgs::List(res_args) = &mut res.arguments {
+                    res_args.torrents.retain(|item| item.id != remove_id);
                 }
             }
         }
@@ -147,20 +189,20 @@ fn test_end_to_end() {
     .create();
 
     // run monitor in thread
-    let url = server.url();
-    let stop_signal: Arc<std::sync::atomic::AtomicBool> = Arc::new(AtomicBool::new(false));
-    let stop_signal_ins = stop_signal.clone();
-    let app_thread = thread::spawn(move || {
-        let mut monitor = Monitor::new(
-            url.as_ref(),
-            None,
-            Some(0),
-            Some(0),
-            Some(0),
-            username,
-            password,
-        );
-        monitor.run(Some(stop_signal_ins));
+    let stop_signal: Arc<Mutex<AtomicBool>> = Arc::new(Mutex::new(AtomicBool::new(false)));
+    let stop_signal_clone = stop_signal.clone();
+    let mut monitor = Monitor::new(
+        format!("{}/transmission/rpc", server.url()).as_str(),
+        None,
+        Some(0),
+        Some(0),
+        Some(0),
+        username,
+        password,
+    );
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let app_thread = rt.spawn(async move {
+        monitor.run(Some(stop_signal_clone)).await;
     });
 
     // validate session exchange
@@ -191,9 +233,9 @@ fn test_end_to_end() {
             session_id_clone.as_str()
         );
 
-        println!("Providing list response {}", String::from_utf8(request.body().unwrap().clone()).unwrap());
 
         let res = list_res_clone.lock().unwrap();
+        println!("{}", serde_json::to_string(&*res).unwrap().as_str());
         serde_json::to_string(&*res).unwrap().into()
     })
     .expect_at_least(2)
@@ -214,15 +256,17 @@ fn test_end_to_end() {
     }
 
     // stop server
-    stop_signal.store(true, Ordering::SeqCst);
-    app_thread.join().expect("failed to join stop thread");
+    stop_signal.lock().await.store(true, Ordering::SeqCst);
+    _ = tokio::join!(app_thread);
 
     // validate files where deleted
-    if let List(res) = &list_res.lock().unwrap().arguments {
-        assert_eq!(res.torrents.len(), 1);
+    if let ResArgs::List(res) = &list_res.lock().unwrap().arguments {
+        assert_eq!(res.torrents.len(), 0);
     } else {
         panic!("Invalid response arguments");
     }
 
     // test database state (todo)
+
+    rt.shutdown_background();
 }

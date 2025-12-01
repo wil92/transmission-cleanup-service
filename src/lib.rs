@@ -1,8 +1,11 @@
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
 use crate::logic::api::Api;
 use crate::logic::database::Database;
+use tokio::sync::Mutex;
 
 pub mod logic;
 
@@ -43,43 +46,50 @@ impl Monitor {
         }
     }
 
-    pub fn run(&mut self, stop_signal: Option<Arc<std::sync::atomic::AtomicBool>>) {
+    pub async fn run(&mut self, stop_signal: Option<Arc<Mutex<AtomicBool>>>) {
         let mut scan_interval_it = 0;
 
         self.database
             .connect()
+            .await
             .expect("Failed to connect to database");
 
         loop {
-            if let Some(stop_signal) = &stop_signal {
-                if stop_signal.load(std::sync::atomic::Ordering::SeqCst) {
+            if let Some(signal) = &stop_signal {
+                if signal
+                    .lock()
+                    .await
+                    .load(std::sync::atomic::Ordering::SeqCst)
+                {
                     break;
                 }
             }
 
             if scan_interval_it >= self.scan_interval {
-                self.scan_files_and_cleanup();
+                self.scan_files_and_cleanup().await;
                 scan_interval_it = 0;
             }
 
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            tokio::time::sleep(Duration::from_secs(1)).await;
             scan_interval_it += 1;
         }
     }
 
-    fn scan_files_and_cleanup(&mut self) {
+    async fn scan_files_and_cleanup(&mut self) {
         // Fetch files from API and update database
-        let files = self.api.fetch_files().expect("Failed to fetch files");
+        let files = self.api.fetch_files().await.expect("Failed to fetch files");
         let mut updated_files: Vec<i32> = vec![];
         for file in files {
-            updated_files.push(self.database.create_or_update_file(file));
+            updated_files.push(self.database.create_or_update_file(file).await);
         }
 
         // Remove files that are no longer present
-        self.database.remove_no_matching_files_ids(&updated_files);
+        self.database
+            .remove_no_matching_files_ids(&updated_files)
+            .await;
 
         // Cleanup old files based on lifetime
-        let files = self.database.list_of_file_ids();
+        let files = self.database.list_of_file_ids().await;
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -109,6 +119,7 @@ impl Monitor {
         if !files_to_remove.is_empty() {
             self.api
                 .delete_file(&files_to_remove)
+                .await
                 .expect("Failed to delete file via API");
         }
     }
