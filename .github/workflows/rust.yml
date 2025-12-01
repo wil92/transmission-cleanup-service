@@ -33,7 +33,7 @@ jobs:
 
       - name: create environment file
         run: |
-          echo "FP_MONITORING_URL=https://bt.guilledev.com" > .env
+          echo "FP_MONITORING_URL=https://bt.guilledev.com/transmission/rpc" > .env
           echo "FP_SCAN_INTERVAL=60" >> .env
           echo "FP_FILE_LIFETIME=604800" >> .env
           echo "FP_FILE_LIFETIME_AFTER_COPIED=18000" >> .env
