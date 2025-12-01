@@ -35,6 +35,7 @@ impl Api {
                     TorrentGetField::Id,
                     TorrentGetField::AddedDate,
                     TorrentGetField::IsFinished,
+                    TorrentGetField::PercentDone,
                 ]),
                 None,
             )
@@ -51,7 +52,9 @@ impl Api {
                 id: 0,
                 server_id: item.id.expect("Missing torrent ID") as i32,
                 added_date: item.added_date.expect("Missing addedDate").timestamp(),
-                finish_date: if item.is_finished.expect("Missing isFinished value") {
+                finish_date: if item.is_finished.expect("Missing isFinished value")
+                    || item.percent_done.expect("Missing percentDone") >= 1.0
+                {
                     Some(millis)
                 } else {
                     None
@@ -71,7 +74,8 @@ impl Api {
             ids.iter().map(|&id| Id(id as i64)).collect::<Vec<_>>()
         );
 
-        let res = self.client
+        let res = self
+            .client
             .as_mut()
             .unwrap()
             .torrent_remove(ids.iter().map(|&id| Id(id as i64)).collect(), true)

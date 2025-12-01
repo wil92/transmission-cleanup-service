@@ -44,6 +44,8 @@ struct ResItem {
     added_date: i64,
     #[serde(rename = "isFinished")]
     is_finished: bool,
+    #[serde(rename = "percentDone")]
+    percent_done: f64
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -115,11 +117,13 @@ async fn test_end_to_end() {
                     id: 1,
                     added_date: get_now_timestamp(),
                     is_finished: false,
+                    percent_done: 0.5,
                 },
                 ResItem {
                     id: 2,
                     added_date: get_now_timestamp(),
                     is_finished: true,
+                    percent_done: 1.0,
                 },
             ],
         }),
@@ -255,9 +259,12 @@ async fn test_end_to_end() {
         }
     }
 
+    // test database state (todo)
+
     // stop server
     stop_signal.lock().await.store(true, Ordering::SeqCst);
     _ = tokio::join!(app_thread);
+    rt.shutdown_background();
 
     // validate files where deleted
     if let ResArgs::List(res) = &list_res.lock().unwrap().arguments {
@@ -265,8 +272,4 @@ async fn test_end_to_end() {
     } else {
         panic!("Invalid response arguments");
     }
-
-    // test database state (todo)
-
-    rt.shutdown_background();
 }
