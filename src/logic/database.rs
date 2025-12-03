@@ -121,6 +121,7 @@ impl Database {
     pub async fn create_or_update_file(&self, file: File) -> i32 {
         let existing_file = self.get_file_by_server_id(file.server_id).await;
         if existing_file.is_none() {
+            println!("Inserting new file: {:?}", file);
             self.connection
                 .lock()
                 .await

@@ -117,10 +117,16 @@ impl Monitor {
         }
 
         if !files_to_remove.is_empty() {
-            self.api
+            match self.api
                 .delete_file(&files_to_remove)
-                .await
-                .expect("Failed to delete file via API");
+                .await {
+                Ok(_) => {
+                    println!("Successfully deleted files: {:?}", files_to_remove);
+                }
+                Err(e) => {
+                    println!("Failed to delete files: {:?}, error: {}", files_to_remove, e);
+                }
+            }
         }
     }
 }
