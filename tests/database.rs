@@ -1,5 +1,5 @@
 use fp::logic::database::Database;
-use fp::logic::database::models::{File};
+use fp::logic::database::models::{File, MigrationVersion};
 use rusqlite::fallible_streaming_iterator::FallibleStreamingIterator;
 
 async fn is_migration_version_table_available(db: &Database) -> bool {
@@ -22,33 +22,33 @@ async fn test_create_database() {
     db.connect().await.expect("Failed to connect to database");
 
     // Check if the migration_version table exists
-    // assert!(is_migration_version_table_available(&db).await);
+    assert!(is_migration_version_table_available(&db).await);
 
     // get all versions
-    // let versions: Vec<MigrationVersion> = db
-    //     .connection
-    //     .lock()
-    //     .await
-    //     .prepare("SELECT * FROM migration_version;")
-    //     .unwrap()
-    //     .query_map([], |row| {
-    //         Ok(MigrationVersion {
-    //             id: row.get(0)?,
-    //             version: row.get(1)?,
-    //             description: row.get(2)?,
-    //         })
-    //     })
-    //     .expect("Failed to query migration_version table")
-    //     .collect::<Result<_, _>>()
-    //     .unwrap();
-    //
-    // // validate the number of versions (update this if new migrations are added)
-    // assert_eq!(versions.len(), 1);
-    //
-    // // Check initial migration version
-    // let initial_version = 1;
-    // assert_eq!(versions[0].version, initial_version);
-    // assert_eq!(versions[0].description, "Initial migration".to_string());
+    let versions: Vec<MigrationVersion> = db
+        .connection
+        .lock()
+        .await
+        .prepare("SELECT * FROM migration_version;")
+        .unwrap()
+        .query_map([], |row| {
+            Ok(MigrationVersion {
+                id: row.get(0)?,
+                version: row.get(1)?,
+                description: row.get(2)?,
+            })
+        })
+        .expect("Failed to query migration_version table")
+        .collect::<Result<_, _>>()
+        .unwrap();
+
+    // validate the number of versions (update this if new migrations are added)
+    assert_eq!(versions.len(), 1);
+
+    // Check initial migration version
+    let initial_version = 1;
+    assert_eq!(versions[0].version, initial_version);
+    assert_eq!(versions[0].description, "Initial migration".to_string());
 }
 
 #[tokio::test]
