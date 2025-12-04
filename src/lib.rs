@@ -79,14 +79,14 @@ impl Monitor {
     async fn scan_files_and_cleanup(&mut self) -> Result<(), String> {
         // Fetch files from API and update database
         let files = self.api.fetch_files().await.expect("Failed to fetch files");
-        let mut updated_files: Vec<i32> = vec![];
+        let mut updated_files_ids: Vec<i32> = vec![];
         for file in files {
-            updated_files.push(self.database.create_or_update_file(file).await);
+            updated_files_ids.push(self.database.create_or_update_file(file).await);
         }
 
         // Remove files that are no longer present
         self.database
-            .remove_no_matching_files_ids(&updated_files)
+            .remove_no_matching_files_ids(&updated_files_ids)
             .await;
 
         // Cleanup old files based on lifetime

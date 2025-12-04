@@ -175,19 +175,19 @@ async fn test_remove_no_matching_files_ids() {
 
     let file1 = File {
         id: 0,
-        server_id: 1,
+        server_id: 4,
         added_date: 1625079600,
         finish_date: None,
     };
     let file2 = File {
         id: 0,
-        server_id: 2,
+        server_id: 14,
         added_date: 1625079601,
         finish_date: None,
     };
     let file3 = File {
         id: 0,
-        server_id: 3,
+        server_id: 54,
         added_date: 1625079602,
         finish_date: None,
     };
