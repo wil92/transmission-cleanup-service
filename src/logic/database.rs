@@ -182,7 +182,7 @@ impl Database {
         let ids_placeholders: Vec<String> =
             ids.iter().map(|v| format!("{}", v).to_string()).collect();
         let sql = format!(
-            "DELETE FROM file WHERE serverId NOT IN ({});",
+            "DELETE FROM file WHERE id NOT IN ({});",
             ids_placeholders.join(", ")
         );
 
