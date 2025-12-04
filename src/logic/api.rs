@@ -41,10 +41,6 @@ impl Api {
 
         let mut files: Vec<File> = vec![];
         for item in list.arguments.torrents {
-            let millis = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64;
             files.push(File {
                 id: 0,
                 server_id: item.id.expect("Missing torrent ID") as i32,
@@ -52,6 +48,10 @@ impl Api {
                 finish_date: if item.is_finished.expect("Missing isFinished value")
                     || item.percent_done.expect("Missing percentDone") >= 1.0
                 {
+                    let millis = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs() as i64;
                     Some(millis)
                 } else {
                     None
