@@ -6,26 +6,23 @@ use url::Url;
 use crate::logic::database::models::File;
 
 pub struct Api {
-    auth: BasicAuth,
-    api_url: String,
     client: Option<TransClient>,
 }
 
 impl Api {
-    pub fn new(username: String, password: String, api_url: String) -> Self {
+    pub fn new(username: String, password: String, api_url: &str) -> Self {
         Api {
-            auth: BasicAuth {
-                user: username,
-                password,
-            },
-            api_url,
-            client: None,
+            client: Some(TransClient::with_auth(
+                Url::parse(api_url).expect("Invalid API URL"),
+                BasicAuth {
+                    user: username,
+                    password,
+                },
+            )),
         }
     }
 
     pub async fn fetch_files(&mut self) -> Result<Vec<File>, String> {
-        self.create_client();
-
         let list = self
             .client
             .as_mut()
@@ -66,8 +63,6 @@ impl Api {
     }
 
     pub async fn delete_file(&mut self, ids: &Vec<i32>) -> Result<(), String> {
-        self.create_client();
-
         println!("Deleting files with IDs: {:?}", ids);
         println!(
             "Deleting files with IDs: {:?}",
@@ -88,14 +83,5 @@ impl Api {
             return Err(format!("Failed to delete files: {}", res.result));
         }
         Ok(())
-    }
-
-    fn create_client(&mut self) {
-        if self.client.is_none() {
-            self.client = Some(TransClient::with_auth(
-                Url::parse(&self.api_url).expect("Invalid API URL"),
-                self.auth.clone(),
-            ));
-        }
     }
 }

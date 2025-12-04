@@ -19,7 +19,7 @@ async fn test_api_list_files() {
     let mut api = Api::new(
         username.to_string(),
         password.to_string(),
-        format!("{}/transmission/rpc", server.url()),
+        format!("{}/transmission/rpc", server.url()).as_str(),
     );
 
     match api.fetch_files().await {
@@ -50,7 +50,7 @@ async fn test_api_list_files_with_finish() {
     let mut api = Api::new(
         username.to_string(),
         password.to_string(),
-        format!("{}/transmission/rpc", server.url()),
+        format!("{}/transmission/rpc", server.url()).as_str(),
     );
 
     match api.fetch_files().await {
@@ -81,7 +81,7 @@ async fn test_api_list_files_with_finish_by_percent() {
     let mut api = Api::new(
         username.to_string(),
         password.to_string(),
-        format!("{}/transmission/rpc", server.url()),
+        format!("{}/transmission/rpc", server.url()).as_str(),
     );
 
     match api.fetch_files().await {
@@ -118,7 +118,7 @@ async fn test_api_delete_file() {
     let mut api = Api::new(
         username.to_string(),
         password.to_string(),
-        format!("{}/transmission/rpc", server.url()),
+        format!("{}/transmission/rpc", server.url()).as_str(),
     );
 
     match api.delete_file(&vec![1, 2, 3]).await {

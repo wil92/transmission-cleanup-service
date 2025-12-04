@@ -39,7 +39,7 @@ impl Monitor {
             api: Api::new(
                 username.to_string(),
                 password.to_string(),
-                monitoring_url.to_string(),
+                monitoring_url,
             ),
 
             database: Database::new(database_path),
@@ -89,7 +89,7 @@ impl Monitor {
             .await;
 
         // Cleanup old files based on lifetime
-        let files = self.database.list_of_file_ids().await;
+        let files_id = self.database.list_of_file_ids().await;
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -98,7 +98,7 @@ impl Monitor {
         // Remove files older copied files
         let mut already_removed_files: HashSet<i32> = HashSet::new();
         let mut files_to_remove: Vec<i32> = vec![];
-        for file in files.clone() {
+        for file in files_id.clone() {
             if let Some(finish_date) = file.finish_date {
                 if current_time - finish_date > self.files_lifetime_after_copied as i64 {
                     files_to_remove.push(file.server_id);
@@ -108,7 +108,7 @@ impl Monitor {
         }
 
         // Remove files older than lifetime
-        for file in files {
+        for file in files_id {
             if current_time - file.added_date > self.files_lifetime as i64
                 && !already_removed_files.contains(&file.id)
             {

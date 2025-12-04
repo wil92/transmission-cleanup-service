@@ -271,7 +271,7 @@ async fn test_get_file_by_server_id() {
     db.create_or_update_file(file.clone()).await;
 
     let fetched_file = db
-        .get_file_by_server_id(42)
+        .get_file_by_server_id(file.server_id)
         .await
         .expect("File not found by server ID");
     assert_files_equal(&fetched_file, &file);
