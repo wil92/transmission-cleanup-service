@@ -36,11 +36,7 @@ impl Monitor {
             // Default to 5 hours
             files_lifetime_after_copied: files_lifetime_after_copied.unwrap_or(18000),
 
-            api: Api::new(
-                username.to_string(),
-                password.to_string(),
-                monitoring_url,
-            ),
+            api: Api::new(username.to_string(), password.to_string(), monitoring_url),
 
             database: Database::new(database_path),
         }
@@ -66,7 +62,12 @@ impl Monitor {
             }
 
             if scan_interval_it >= self.scan_interval {
-                self.scan_files_and_cleanup().await;
+                match self.scan_files_and_cleanup().await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        println!("Error during scan and cleanup: {}", e);
+                    }
+                }
                 scan_interval_it = 0;
             }
 
@@ -75,7 +76,7 @@ impl Monitor {
         }
     }
 
-    async fn scan_files_and_cleanup(&mut self) {
+    async fn scan_files_and_cleanup(&mut self) -> Result<(), String> {
         // Fetch files from API and update database
         let files = self.api.fetch_files().await.expect("Failed to fetch files");
         let mut updated_files: Vec<i32> = vec![];
@@ -117,16 +118,19 @@ impl Monitor {
         }
 
         if !files_to_remove.is_empty() {
-            match self.api
-                .delete_file(&files_to_remove)
-                .await {
+            match self.api.delete_file(&files_to_remove).await {
                 Ok(_) => {
                     println!("Successfully deleted files: {:?}", files_to_remove);
                 }
                 Err(e) => {
-                    println!("Failed to delete files: {:?}, error: {}", files_to_remove, e);
+                    println!(
+                        "Failed to delete files: {:?}, error: {}",
+                        files_to_remove, e
+                    );
                 }
             }
         }
+
+        Ok(())
     }
 }
